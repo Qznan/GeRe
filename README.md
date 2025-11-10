@@ -15,7 +15,15 @@
 
 🚀 **Official Implementation** of **GeRe** - A novel replay framework for continual learning of Large Language Models, designed to mitigate forgetting through general samples replay and activation state constraint. 
 
+<p align="center">
+    <img src="docs/introduction.png" width="80%"/>
+</p>
 
+**Traditional replay vs. GeRe**: unlike traditional replay
+requiring laborious collection of an increasing set of downstream replay samples, GeRe simply employs a fixed set of
+general replay samples to not only retain general capabilities
+in continual learning, but also enhance the overall performance of learned downstream tasks. The blue oval is the
+threshold-based margin loss that imposes consistency constraint on neural activation state under GeRe frameworks.
 
 ## 🔥 News
 - [2025/08/06]  🎉 Initial release of **[Paper](https://arxiv.org/abs/2508.04676)** and **[GeRe](https://github.com/Qznan/GeRe)** framework! GeRe is now available as a plug-and-play package, enabling seamless integration into your existing applications.
