@@ -1,18 +1,18 @@
 import torch
-from transformers import GenerationConfig
+from transformers.trainer import *
 from transformers.trainer_seq2seq import Seq2SeqTrainer
 from transformers.trainer import logger
-from transformers.trainer import *
 import transformers
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_pt_utils import LengthGroupedSampler
 from dataclasses import dataclass
 from transformers.data.data_collator import *
-from transformers.models.llama.modeling_llama import LlamaForCausalLM
 import json
+import os
 from typing import Sized, Iterator, Callable, List
 from tqdm import tqdm
 from datasets import load_dataset
+
 # import ipdb
 
 # import logging
@@ -56,27 +56,11 @@ def load_jsonl(jsonl_file):
         return [json.loads(line.strip()) for line in f]
 
 
-def is_deepspeed_zero3_enabled():
-    return False
-
-
-def _is_peft_model(model):
-    return is_peft_available() and isinstance(model, PeftModel)
-
-
 def check_tensor(loss: torch.Tensor, print_name='loss'):
     if loss.isnan().any().item():
-        print(f'检测到{print_name}有nan:', loss)
+        print(f'Detected! {print_name} has a NaN value:', loss)
     elif (loss == 0).all().item():
-        print(f'检测到{print_name}全为0:', loss)
-
-
-def check_model(model_name, supported_models):
-    for sup_model in supported_models:
-        if sup_model.lower() in model_name.lower():
-            return True
-
-    return False
+        print(f'Detected! All values of {print_name} are 0: ', loss)
 
 
 def pad_sequence(sequences, padding_value=0.0, direction='right', force_pad_to_max_specific_len=None):
@@ -351,16 +335,20 @@ class GeRePresaveCallback(TrainerCallback):
 
 class GeReTrainer(Seq2SeqTrainer):
     def __init__(self, *args, gere_hidden_state_saving_dir='./gere_saving', reuse_gere_hidden_state=True,
-                 num_interpolate_per_batch=None, w_strategy='100', **kwargs):
+                 num_interpolate_per_batch=None, w_strategy='100', gere_data_file=None, **kwargs):
         CURRENT_DIR = os.path.dirname(__file__)
         self.num_interpolate_per_batch = num_interpolate_per_batch
         self.gere_hidden_state_saving_dir = gere_hidden_state_saving_dir
         self.w_strategy = w_strategy
         self.reuse_gere_hidden_state = reuse_gere_hidden_state
         self.args = kwargs['args']
+        self.gere_data_file = gere_data_file
+        if self.gere_data_file is None:
+            self.gere_data_file = os.path.join(CURRENT_DIR, "slimpajama/slimpajama_6B_chunk0_head1k.jsonl")
+
         self.gere_dataset = load_dataset(
             os.path.join(CURRENT_DIR, "gere_dataset.py"),
-            data_file=os.path.join(CURRENT_DIR, "slimpajama/slimpajama_6B_chunk0_head1k.jsonl"),
+            data_file=self.gere_data_file,
             gere_dataset_name='SlimRedpajama',
             num_gere_samples=1000,
             split='train',
@@ -371,6 +359,8 @@ class GeReTrainer(Seq2SeqTrainer):
             tokenizer = kwargs['processing_class']
         else:
             tokenizer = kwargs['tokenizer']
+
+        self.args.remove_unused_columns = False  # avoid removing 'GeRe' data
 
         # self.gere_dataset = self.gere_dataset.select(range(100))  # for test
         self.num_gere_dataset = len(self.gere_dataset)
@@ -411,7 +401,7 @@ class GeReTrainer(Seq2SeqTrainer):
             kwargs['callbacks'].append(self.gere_presaving_callback)
 
         kwargs['train_dataset'] = datasets.concatenate_datasets([self.gere_dataset, kwargs['train_dataset']])
-        # kwargs['train_dataset'].set_format(type="torch", output_all_columns=True)
+        # kwargs['train_dataset'].set_format(type="torch")
 
         # ipdb.set_trace()
         super().__init__(*args, **kwargs)
